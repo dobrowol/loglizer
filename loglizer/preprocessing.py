@@ -15,6 +15,10 @@ from collections import Counter
 from scipy.special import expit
 from itertools import compress
 from torch.utils.data import DataLoader, Dataset
+from gensim.models import Doc2Vec
+from gensim.models.doc2vec import TaggedDocument
+from tqdm import tqdm
+from sklearn import utils
 
 class Iterator(Dataset):
     def __init__(self, data_dict, batch_size=32, shuffle=False, num_workers=1):
@@ -43,7 +47,39 @@ class Vectorizer(object):
         y = y
         data_dict = {"SessionId": x["SessionId"].values, "window_y": window_y.values, "y": y.values, "x": np.array(x["EventSequence"].tolist())}
         return data_dict
-        
+
+
+class Doc2VecVectorizer(object):
+
+    def _to_vec(self, tagged_docs, model):
+        sents = tagged_docs.values
+        print(sents)
+        targets, regressors = zip(*[(doc.tags[0], model.infer_vector(doc.words)) for doc in sents])
+        return targets, regressors
+
+    def fit_transform(self, x, y):
+        dataFrame = pd.DataFrame({'sentence':x, 'Label':y})
+        tagged = dataFrame.apply(
+            lambda r: TaggedDocument(words=r['sentence'], tags=[r.Label]), axis=1)
+
+        import multiprocessing
+        cores = multiprocessing.cpu_count()
+        self.model_dbow = Doc2Vec(dm=0, vector_size=300, negative=5, hs=0, min_count=2, sample=0, workers=cores)
+        self.model_dbow.build_vocab([x for x in tqdm(tagged.values)])
+
+        for epoch in range(30):
+            self.model_dbow.train(utils.shuffle([x for x in tqdm(tagged.values)]),
+                             total_examples=len(tagged.values), epochs=1)
+            self.model_dbow.alpha -= 0.002
+            self.model_dbow.min_alpha = self.model_dbow.alpha
+        return self._to_vec(tagged, self.model_dbow)
+
+    def transform(self, x, y):
+        dataFrame = pd.DataFrame({'sentence':x, 'Label':y})
+        tagged = dataFrame.apply(
+            lambda r: TaggedDocument(words=r['sentence'], tags=[r.Label]), axis=1)
+        return self._to_vec(tagged, self.model_dbow)
+
 
 class FeatureExtractor(object):
 

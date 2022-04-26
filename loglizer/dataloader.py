@@ -13,6 +13,8 @@ import numpy as np
 import re
 from sklearn.utils import shuffle
 from collections import OrderedDict
+import ruptures as rpt
+from tqdm import tqdm
 
 def _split_data(x_data, y_data=None, train_ratio=0, split_type='uniform'):
     if split_type == 'uniform' and y_data is not None:
@@ -44,6 +46,7 @@ def _split_data(x_data, y_data=None, train_ratio=0, split_type='uniform'):
         y_train = y_train[indexes]
     return (x_train, y_train), (x_test, y_test)
 
+
 def load_HDFS(log_file, label_file=None, window='session', train_ratio=0.5, split_type='sequential', save_csv=False, window_size=0):
     """ Load HDFS structured log into train and test data
 
@@ -68,7 +71,14 @@ def load_HDFS(log_file, label_file=None, window='session', train_ratio=0.5, spli
 
     if log_file.endswith('.npz'):
         # Split training and validation set in a class-uniform way
+        # save np.load
+        np_load_old = np.load
+
+        # modify the default parameters of np.load
+        np.load = lambda *a, **k: np_load_old(*a, allow_pickle=True, **k)
+
         data = np.load(log_file)
+        np.load = np_load_old
         x_data = data['x_data']
         y_data = data['y_data']
         (x_train, y_train), (x_test, y_test) = _split_data(x_data, y_data, train_ratio, split_type)
@@ -141,6 +151,46 @@ def load_HDFS(log_file, label_file=None, window='session', train_ratio=0.5, spli
           .format(num_test, num_test_pos, num_test - num_test_pos))
 
     return (x_train, y_train), (x_test, y_test)
+
+def convert_to_integer_list(array_of_lists):
+    for ind,l in tqdm(enumerate(array_of_lists)):
+        array_of_lists[ind] = np.array([int(x.strip('E')) for x in l])
+
+def add_to_sentence_list(word,collection):
+    new_word_arr = np.char.mod('%d', word)
+    new_word = "t".join(new_word_arr)
+    collection.append(new_word)
+
+def create_sentence_of_words(points, change_points):
+    beg = -1
+    sentence = [] 
+    for r in change_points:
+        add_to_sentence_list(points[beg+1:r], sentence)
+        beg = r
+    if beg == len(points):
+        return sentence
+    add_to_sentence_list(points[beg+1:])
+    return sentence
+
+
+def convert_to_list_of_sentences(array_of_lists):
+    model = "l2"
+    n_bkps, sigma = 5, 5
+    for ind,points in tqdm(enumerate(array_of_lists)):
+        algo = rpt.Binseg(model=model).fit(np.array(points))
+        n = len(points)
+        change_points = algo.predict(pen=np.log(n)*sigma**2)
+        array_of_lists[ind] = create_sentence_of_words(points, change_points)
+
+
+def load_HDFS_int(log_file, label_file=None, window='session', train_ratio=0.5, split_type='sequential', save_csv=False,
+                  window_size=0):
+    (x_tr, y_train), (x_te, y_test) = load_HDFS(log_file, label_file, window, train_ratio, split_type, save_csv, window_size)
+    convert_to_integer_list(x_tr)
+    convert_to_integer_list(x_te)
+    convert_to_list_of_sentences(x_tr)
+    convert_to_list_of_sentences(x_te)
+    return (x_tr, y_train), (x_te, y_test)
 
 def slice_hdfs(x, y, window_size):
     results_data = []
