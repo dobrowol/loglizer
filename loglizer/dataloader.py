@@ -183,6 +183,18 @@ def convert_to_list_of_sentences(array_of_lists):
         array_of_lists[ind] = create_sentence_of_words(points, change_points)
 
 
+def write_to_file(filename, array_of_lists):
+    for ind,l in tqdm(enumerate(array_of_lists)):
+        array_of_lists[ind] = ' '.join([str(elem) for elem in l])
+    df = pd.DataFrame({"sentences":array_of_lists})
+    df.to_csv(filename, index=False, header=None)
+
+def write_array_to_file(filename, array_of_lists):
+    df = pd.DataFrame({"sentences":array_of_lists})
+    df.to_csv(filename, index=False, header=None)
+
+
+
 def load_HDFS_int(log_file, label_file=None, window='session', train_ratio=0.5, split_type='sequential', save_csv=False,
                   window_size=0):
     (x_tr, y_train), (x_te, y_test) = load_HDFS(log_file, label_file, window, train_ratio, split_type, save_csv, window_size)
@@ -191,6 +203,18 @@ def load_HDFS_int(log_file, label_file=None, window='session', train_ratio=0.5, 
     convert_to_list_of_sentences(x_tr)
     convert_to_list_of_sentences(x_te)
     return (x_tr, y_train), (x_te, y_test)
+
+
+def load_HDFS_to_file(log_file, label_file=None, window='session', train_ratio=0.5, split_type='sequential', save_csv=False,
+                  window_size=0):
+    (x_tr, y_train), (x_te, y_test) = load_HDFS(log_file, label_file, window, train_ratio, split_type, save_csv, window_size)
+    convert_to_integer_list(x_tr)
+    convert_to_integer_list(x_te)
+    write_to_file("x_train.txt", x_tr)
+    write_to_file("x_test.txt", x_te)
+    write_array_to_file("y_train.txt", y_train)
+    write_array_to_file("y_test.txt", y_test)
+    
 
 def slice_hdfs(x, y, window_size):
     results_data = []

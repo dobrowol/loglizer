@@ -12,7 +12,6 @@ struct_log = '../data/HDFS/HDFS.npz' # The benchmark dataset
 
 if __name__ == '__main__':
 
-    model = ChangePoints()
     (x_tr, y_train), (x_te, y_test) = dataloader.load_HDFS_int(struct_log,
                                                            window='session', 
                                                            train_ratio=0.5,
